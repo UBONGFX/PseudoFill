@@ -14,8 +14,10 @@ import {
   Search,
   Filter,
   AlertCircle,
+  Settings as SettingsIcon,
 } from 'lucide-react'
 import { ModeToggle } from '../components/mode-toggle'
+import { Settings } from '../components/Settings'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -57,6 +59,7 @@ function App() {
   const [persona, setPersona] = useState<Persona | null>(null)
   const [copiedField, setCopiedField] = useState<string>('')
   const [showPersona, setShowPersona] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [savedPersonas, setSavedPersonas] = useState<SavedPersona[]>([])
   const [currentDomain, setCurrentDomain] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState<string>('')
@@ -173,6 +176,14 @@ function App() {
     setPersona(null)
   }
 
+  const goBackFromSettings = () => {
+    setShowSettings(false)
+  }
+
+  const openSettings = () => {
+    setShowSettings(true)
+  }
+
   const deletePersona = () => {
     // Check if this is a saved persona with an ID
     if (persona && 'id' in persona) {
@@ -188,6 +199,10 @@ function App() {
   // Check if a persona already exists for the current domain
   const existingPersonaForDomain =
     persona && !isPersonaSaved ? savedPersonas.find((p) => p.domain === currentDomain) : null
+
+  if (showSettings) {
+    return <Settings onBack={goBackFromSettings} />
+  }
 
   if (showPersona && persona) {
     return (
@@ -448,7 +463,9 @@ function App() {
             <h1 className="text-2xl font-bold">PseudoFill</h1>
           </div>
           <div className="flex items-center gap-2">
-            <ModeToggle />
+            <Button variant="ghost" size="sm" onClick={openSettings}>
+              <SettingsIcon className="h-4 w-4" />
+            </Button>
             {savedPersonas.length > 0 && (
               <Button variant="default" size="sm" onClick={generateNewPersona}>
                 <PlusIcon className="h-4 w-4" />
@@ -470,7 +487,7 @@ function App() {
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9">
+                <Button variant="ghost" size="sm" className="h-9">
                   <Filter className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
