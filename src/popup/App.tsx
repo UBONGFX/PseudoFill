@@ -25,6 +25,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import {
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -189,15 +200,36 @@ function App() {
             </Button>
             <div className="flex gap-2">
               {isPersonaSaved ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={deletePersona}
-                  className="hover:bg-destructive hover:text-destructive-foreground"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="hover:bg-destructive hover:text-destructive-foreground"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Persona?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete {persona.fullName}? This action cannot be
+                        undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel className="flex-1">Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={deletePersona}
+                        className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               ) : (
                 <Button variant="ghost" size="sm" onClick={savePersonaToStorage}>
                   <Save className="h-4 w-4" />
