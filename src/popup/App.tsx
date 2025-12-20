@@ -11,10 +11,19 @@ import {
   MapPin,
   Save,
   Trash2,
+  Search,
+  Filter,
 } from 'lucide-react'
 import { ModeToggle } from '../components/mode-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Empty,
   EmptyContent,
@@ -37,6 +46,8 @@ function App() {
   const [showPersona, setShowPersona] = useState(false)
   const [savedPersonas, setSavedPersonas] = useState<SavedPersona[]>([])
   const [currentDomain, setCurrentDomain] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [searchFilters, setSearchFilters] = useState<string[]>(['name', 'email', 'domain'])
 
   // Load saved personas on mount
   useEffect(() => {
@@ -54,6 +65,50 @@ function App() {
     const result = await chrome.storage.local.get(['personas'])
     const personas = result.personas || []
     setSavedPersonas(personas)
+  }
+
+  // Get sorted personas with current domain first
+  const getSortedPersonas = () => {
+    return [...savedPersonas].sort((a, b) => {
+      // Current domain personas come first
+      const aIsCurrentDomain = a.domain === currentDomain
+      const bIsCurrentDomain = b.domain === currentDomain
+
+      if (aIsCurrentDomain && !bIsCurrentDomain) return -1
+      if (!aIsCurrentDomain && bIsCurrentDomain) return 1
+
+      // Otherwise sort by creation date (newest first)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
+  }
+
+  // Get filtered personas based on search query and filters
+  const getFilteredPersonas = () => {
+    const sorted = getSortedPersonas()
+
+    if (!searchQuery.trim()) return sorted
+
+    const query = searchQuery.toLowerCase()
+    return sorted.filter((persona) => {
+      if (searchFilters.includes('name') && persona.fullName.toLowerCase().includes(query))
+        return true
+      if (searchFilters.includes('email') && persona.email.toLowerCase().includes(query))
+        return true
+      if (searchFilters.includes('username') && persona.username.toLowerCase().includes(query))
+        return true
+      if (searchFilters.includes('domain') && persona.domain.toLowerCase().includes(query))
+        return true
+      if (searchFilters.includes('phone') && persona.phone.includes(query)) return true
+      if (searchFilters.includes('address') && persona.address.full.toLowerCase().includes(query))
+        return true
+      return false
+    })
+  }
+
+  const toggleFilter = (filter: string) => {
+    setSearchFilters((prev) =>
+      prev.includes(filter) ? prev.filter((f) => f !== filter) : [...prev, filter]
+    )
   }
 
   const savePersonaToStorage = async () => {
@@ -331,7 +386,7 @@ function App() {
 
   return (
     <div
-      className="w-[400px] h-[600px] p-4 flex flex-col overflow-hidden"
+      className={`w-[400px] p-4 flex flex-col overflow-hidden ${savedPersonas.length === 0 ? 'h-[350px]' : 'h-[600px]'}`}
       style={{
         backgroundImage:
           'linear-gradient(to bottom, color-mix(in oklch, var(--muted), transparent 50%), var(--background))',
@@ -351,6 +406,71 @@ function App() {
             )}
           </div>
         </div>
+
+        {savedPersonas.length > 0 && (
+          <div className="flex items-center gap-2 pt-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search personas..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9">
+                  <Filter className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuCheckboxItem
+                  checked={searchFilters.includes('name')}
+                  onCheckedChange={() => toggleFilter('name')}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Name
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={searchFilters.includes('email')}
+                  onCheckedChange={() => toggleFilter('email')}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Email
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={searchFilters.includes('username')}
+                  onCheckedChange={() => toggleFilter('username')}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Username
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={searchFilters.includes('domain')}
+                  onCheckedChange={() => toggleFilter('domain')}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Domain
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={searchFilters.includes('phone')}
+                  onCheckedChange={() => toggleFilter('phone')}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Phone
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={searchFilters.includes('address')}
+                  onCheckedChange={() => toggleFilter('address')}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Address
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
 
         {savedPersonas.length === 0 ? (
           <Empty>
@@ -383,7 +503,8 @@ function App() {
         ) : (
           <div className="flex items-center">
             <p className="text-sm text-muted-foreground">
-              {savedPersonas.length} persona{savedPersonas.length !== 1 ? 's' : ''} saved
+              {getFilteredPersonas().length} of {savedPersonas.length} persona
+              {savedPersonas.length !== 1 ? 's' : ''}
             </p>
           </div>
         )}
@@ -391,7 +512,7 @@ function App() {
 
       {savedPersonas.length > 0 && (
         <div className="space-y-2 overflow-y-auto flex-1 mt-4 pr-1">
-          {savedPersonas.map((savedPersona) => (
+          {getFilteredPersonas().map((savedPersona) => (
             <div
               key={savedPersona.id}
               className="flex items-center gap-3 p-3 border border-border/50 rounded-lg hover:border-primary/30 hover:bg-accent cursor-pointer transition-colors"
