@@ -13,6 +13,7 @@ import {
   Trash2,
   Search,
   Filter,
+  AlertCircle,
 } from 'lucide-react'
 import { ModeToggle } from '../components/mode-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -35,6 +36,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
   Empty,
   EmptyContent,
@@ -183,6 +185,10 @@ function App() {
   // Check if current persona is saved
   const isPersonaSaved = persona && 'id' in persona
 
+  // Check if a persona already exists for the current domain
+  const existingPersonaForDomain =
+    persona && !isPersonaSaved ? savedPersonas.find((p) => p.domain === currentDomain) : null
+
   if (showPersona && persona) {
     return (
       <div
@@ -239,6 +245,15 @@ function App() {
             </div>
           </div>
 
+          {existingPersonaForDomain && (
+            <Alert className="my-4">
+              <AlertCircle className="w-4 h-4" />
+              <AlertTitle className="text-md">
+                You already have a persona for this website
+              </AlertTitle>
+            </Alert>
+          )}
+
           <div className="space-y-4">
             <div className="text-center space-y-2">
               <Avatar className="h-20 w-20 mx-auto border-4 border-primary/20">
@@ -248,7 +263,10 @@ function App() {
                 </AvatarFallback>
               </Avatar>
               <h2 className="text-xl font-bold">{persona.fullName}</h2>
-              <p className="text-xs text-muted-foreground">Your privacy-protected persona</p>
+              <p className="text-xs text-muted-foreground">
+                Your privacy-protected persona for{' '}
+                <span className="font-medium">{currentDomain}</span>
+              </p>
             </div>
 
             <div className="space-y-2">
