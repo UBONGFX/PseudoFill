@@ -186,7 +186,7 @@ function App() {
   if (showPersona && persona) {
     return (
       <div
-        className="w-[400px] h-[650px] p-4 overflow-y-auto"
+        className="w-[400px] h-[650px] p-4 overflow-y-auto animate-in fade-in duration-300"
         style={{
           backgroundImage:
             'linear-gradient(to bottom, color-mix(in oklch, var(--muted), transparent 50%), var(--background))',
@@ -418,7 +418,7 @@ function App() {
 
   return (
     <div
-      className={`w-[400px] p-4 flex flex-col overflow-hidden ${savedPersonas.length === 0 ? 'h-[350px]' : 'h-[600px]'}`}
+      className={`w-[400px] p-4 flex flex-col overflow-hidden animate-in fade-in duration-300 ${savedPersonas.length === 0 ? 'h-[350px]' : 'h-[600px]'}`}
       style={{
         backgroundImage:
           'linear-gradient(to bottom, color-mix(in oklch, var(--muted), transparent 50%), var(--background))',
