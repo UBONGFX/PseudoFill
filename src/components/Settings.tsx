@@ -118,7 +118,7 @@ export function Settings({ onBack }: SettingsProps) {
     setTimeout(() => setIsDeleted(false), 2000)
   }
   const removeFromDeletedList = async (aliasId: number) => {
-    const updatedDeletedIds = deletedAliasIds.filter(id => id !== aliasId)
+    const updatedDeletedIds = deletedAliasIds.filter((id) => id !== aliasId)
     setDeletedAliasIds(updatedDeletedIds)
     await chrome.storage.local.set({ deletedSimpleLoginAliasIds: updatedDeletedIds })
   }
@@ -152,7 +152,7 @@ export function Settings({ onBack }: SettingsProps) {
       let newPersonasCount = 0
       let updatedPersonasCount = 0
       const updatedPersonas = [...savedPersonas]
-      const fetchedAliasIds = fetchedAliases.map(a => a.id)
+      const fetchedAliasIds = fetchedAliases.map((a) => a.id)
 
       // First, mark any personas whose aliases no longer exist in SimpleLogin
       updatedPersonas.forEach((persona, index) => {
