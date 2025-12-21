@@ -1,16 +1,29 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Moon, Sun, Monitor, Trash2, CheckCircle2, Mail, RefreshCw } from 'lucide-react'
+import {
+  ArrowLeft,
+  Moon,
+  Sun,
+  Monitor,
+  Trash2,
+  CheckCircle2,
+  Mail,
+  RefreshCw,
+  AlertCircle,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Separator } from '@/components/ui/separator'
 import { useTheme } from '@/components/theme-provider'
 import {
   fetchSimpleLoginAliases,
   getStoredApiKey,
   type SimpleLoginAlias,
 } from '@/lib/simplelogin-api'
-import type { Persona } from '@/lib/persona-generator'
+import { generatePersona, type Persona } from '@/lib/persona-generator'
 
 interface SavedPersona extends Persona {
   id: string
@@ -18,6 +31,7 @@ interface SavedPersona extends Persona {
   createdAt: string
   simpleLoginAliasId?: number
   simpleLoginEmail?: string
+  simpleLoginEnabled?: boolean
 }
 
 interface SettingsProps {
@@ -33,6 +47,12 @@ export function Settings({ onBack }: SettingsProps) {
   const [aliases, setAliases] = useState<SimpleLoginAlias[]>([])
   const [savedPersonas, setSavedPersonas] = useState<SavedPersona[]>([])
   const [isLoadingAliases, setIsLoadingAliases] = useState(false)
+  const [deletedAliasIds, setDeletedAliasIds] = useState<number[]>([])
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<{
+    type: 'success' | 'error'
+    text: string
+  } | null>(null)
 
   useEffect(() => {
     // Load saved API key
@@ -41,6 +61,11 @@ export function Settings({ onBack }: SettingsProps) {
         setApiKey(result.simpleLoginApiKey)
         setHasExistingKey(true)
       }
+    })
+
+    // Load deleted alias IDs
+    chrome.storage.local.get(['deletedSimpleLoginAliasIds'], (result) => {
+      setDeletedAliasIds(result.deletedSimpleLoginAliasIds || [])
     })
 
     // Load saved personas
@@ -89,6 +114,113 @@ export function Settings({ onBack }: SettingsProps) {
     setHasExistingKey(false)
     setIsDeleted(true)
     setTimeout(() => setIsDeleted(false), 2000)
+  }
+
+  const syncSimpleLoginAliases = async () => {
+    setIsSyncing(true)
+    setSyncMessage(null)
+
+    try {
+      const apiKeyFromStorage = await getStoredApiKey()
+
+      if (!apiKeyFromStorage) {
+        setSyncMessage({
+          type: 'error',
+          text: 'No API key found. Please add your SimpleLogin API key first.',
+        })
+        setIsSyncing(false)
+        return
+      }
+
+      const fetchedAliases = await fetchSimpleLoginAliases(apiKeyFromStorage)
+
+      if (fetchedAliases.length === 0) {
+        setSyncMessage({
+          type: 'error',
+          text: 'No aliases found in your SimpleLogin account.',
+        })
+        setIsSyncing(false)
+        return
+      }
+
+      let newPersonasCount = 0
+      let updatedPersonasCount = 0
+      const updatedPersonas = [...savedPersonas]
+
+      for (const alias of fetchedAliases) {
+        // Skip if this alias was manually deleted by the user
+        if (deletedAliasIds.includes(alias.id)) {
+          continue
+        }
+
+        // Check if persona for this alias already exists
+        const existingPersonaIndex = updatedPersonas.findIndex(
+          (p) => p.simpleLoginAliasId === alias.id
+        )
+
+        if (existingPersonaIndex !== -1) {
+          // Update existing persona's enabled status only if it changed
+          const existingPersona = updatedPersonas[existingPersonaIndex]
+          if (existingPersona.simpleLoginEnabled !== alias.enabled) {
+            updatedPersonas[existingPersonaIndex] = {
+              ...existingPersona,
+              simpleLoginEnabled: alias.enabled,
+            }
+            updatedPersonasCount++
+          }
+          continue
+        }
+
+        // Extract domain from alias note or use a generic one
+        const domain = alias.note || 'simplelogin.io'
+
+        // Generate a new persona
+        const newPersona = generatePersona(domain)
+
+        // Create saved persona with SimpleLogin alias info
+        const savedPersona: SavedPersona = {
+          ...newPersona,
+          email: alias.email, // Use the actual alias email
+          id: Date.now().toString() + '-' + alias.id,
+          domain: domain,
+          createdAt: new Date(alias.creation_timestamp * 1000).toISOString(),
+          simpleLoginAliasId: alias.id,
+          simpleLoginEmail: alias.email,
+          simpleLoginEnabled: alias.enabled,
+        }
+
+        updatedPersonas.push(savedPersona)
+        newPersonasCount++
+      }
+
+      // Save to storage
+      await chrome.storage.local.set({ personas: updatedPersonas })
+      setSavedPersonas(updatedPersonas)
+
+      // Reload aliases to update the list
+      setAliases(fetchedAliases)
+
+      const messageText =
+        newPersonasCount > 0
+          ? `Successfully synced! ${newPersonasCount} new persona${newPersonasCount !== 1 ? 's' : ''} created${updatedPersonasCount > 0 ? ` and ${updatedPersonasCount} updated` : ''}.`
+          : updatedPersonasCount > 0
+            ? `Successfully synced! ${updatedPersonasCount} persona${updatedPersonasCount !== 1 ? 's' : ''} updated.`
+            : 'All aliases already synced!'
+
+      setSyncMessage({
+        type: 'success',
+        text: messageText,
+      })
+    } catch (error) {
+      console.error('Error syncing SimpleLogin aliases:', error)
+      setSyncMessage({
+        type: 'error',
+        text: 'Failed to sync aliases. Please check your API key and try again.',
+      })
+    } finally {
+      setIsSyncing(false)
+      setTimeout(() => setSyncMessage(null), 5000)
+    }
   }
 
   return (
@@ -211,6 +343,46 @@ export function Settings({ onBack }: SettingsProps) {
               )}
             </div>
 
+            {/* Sync Message */}
+            {syncMessage && (
+              <Alert variant={syncMessage.type === 'error' ? 'destructive' : 'default'}>
+                <AlertCircle className="w-4 h-4" />
+                <AlertTitle className="text-md">
+                  {syncMessage.type === 'success' ? 'Success!' : 'Error'}
+                </AlertTitle>
+                <AlertDescription>{syncMessage.text}</AlertDescription>
+              </Alert>
+            )}
+
+            {/* Sync Button */}
+            {hasExistingKey && (
+              <div className="space-y-3">
+                <Separator className="my-4" />
+                <div>
+                  <Label className="text-sm font-medium">Sync Aliases</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Import all your SimpleLogin aliases as personas
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={syncSimpleLoginAliases}
+                  disabled={isSyncing}
+                >
+                  {isSyncing ? (
+                    <>Syncing...</>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4 mr-2" />
+                      Sync All Aliases
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
             {/* SimpleLogin Aliases Overview */}
             {hasExistingKey && (
               <>
@@ -267,14 +439,41 @@ export function Settings({ onBack }: SettingsProps) {
                               <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                             </div>
 
-                            {linkedPersona ? (
-                              <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                                <CheckCircle2 className="h-3 w-3" />
-                                Linked to {linkedPersona.fullName}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">No persona linked</p>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {linkedPersona ? (
+                                <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Linked to {linkedPersona.fullName}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">No persona linked</p>
+                              )}
+
+                              {alias.enabled ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] px-1.5 py-0 border-green-600 text-green-600 dark:border-green-400 dark:text-green-400"
+                                >
+                                  Alias Active
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] px-1.5 py-0 border-red-600 text-red-600 dark:border-red-400 dark:text-red-400"
+                                >
+                                  Alias Disabled
+                                </Badge>
+                              )}
+
+                              {deletedAliasIds.includes(alias.id) && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] px-1.5 py-0 border-orange-600 text-orange-600 dark:border-orange-400 dark:text-orange-400"
+                                >
+                                  Won't Sync
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         )
                       })}

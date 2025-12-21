@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { Settings } from '../components/Settings'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -55,6 +56,7 @@ interface SavedPersona extends Persona {
   createdAt: string
   simpleLoginAliasId?: number
   simpleLoginEmail?: string
+  simpleLoginEnabled?: boolean
 }
 
 function App() {
@@ -67,7 +69,10 @@ function App() {
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [searchFilters, setSearchFilters] = useState<string[]>(['name', 'email', 'domain'])
   const [isSyncing, setIsSyncing] = useState(false)
-  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [syncMessage, setSyncMessage] = useState<{
+    type: 'success' | 'error'
+    text: string
+  } | null>(null)
 
   // Load saved personas on mount
   useEffect(() => {
@@ -149,9 +154,20 @@ function App() {
   }
 
   const deletePersonaFromStorage = async (id: string) => {
+    const personaToDelete = savedPersonas.find((p) => p.id === id)
     const updatedPersonas = savedPersonas.filter((p) => p.id !== id)
     await chrome.storage.local.set({ personas: updatedPersonas })
     setSavedPersonas(updatedPersonas)
+
+    // If this persona was linked to a SimpleLogin alias, track it as deleted
+    if (personaToDelete?.simpleLoginAliasId) {
+      const result = await chrome.storage.local.get('deletedSimpleLoginAliasIds')
+      const deletedIds = result.deletedSimpleLoginAliasIds || []
+      if (!deletedIds.includes(personaToDelete.simpleLoginAliasId)) {
+        deletedIds.push(personaToDelete.simpleLoginAliasId)
+        await chrome.storage.local.set({ deletedSimpleLoginAliasIds: deletedIds })
+      }
+    }
   }
 
   const viewPersona = (savedPersona: SavedPersona) => {
@@ -182,6 +198,8 @@ function App() {
 
   const goBackFromSettings = () => {
     setShowSettings(false)
+    // Reload personas to reflect any changes made in Settings
+    loadPersonas()
   }
 
   const openSettings = () => {
@@ -203,22 +221,22 @@ function App() {
 
     try {
       const apiKey = await getStoredApiKey()
-      
+
       if (!apiKey) {
-        setSyncMessage({ 
-          type: 'error', 
-          text: 'No API key found. Please add your SimpleLogin API key in Settings.' 
+        setSyncMessage({
+          type: 'error',
+          text: 'No API key found. Please add your SimpleLogin API key in Settings.',
         })
         setIsSyncing(false)
         return
       }
 
       const aliases = await fetchSimpleLoginAliases(apiKey)
-      
+
       if (aliases.length === 0) {
-        setSyncMessage({ 
-          type: 'error', 
-          text: 'No aliases found in your SimpleLogin account.' 
+        setSyncMessage({
+          type: 'error',
+          text: 'No aliases found in your SimpleLogin account.',
         })
         setIsSyncing(false)
         return
@@ -229,9 +247,7 @@ function App() {
 
       for (const alias of aliases) {
         // Check if persona for this alias already exists
-        const existingPersona = updatedPersonas.find(
-          p => p.simpleLoginAliasId === alias.id
-        )
+        const existingPersona = updatedPersonas.find((p) => p.simpleLoginAliasId === alias.id)
 
         if (existingPersona) {
           continue // Skip if persona already exists
@@ -239,10 +255,10 @@ function App() {
 
         // Extract domain from alias note or use a generic one
         const domain = alias.note || 'simplelogin.io'
-        
+
         // Generate a new persona
         const newPersona = generatePersona(domain)
-        
+
         // Create saved persona with SimpleLogin alias info
         const savedPersona: SavedPersona = {
           ...newPersona,
@@ -262,9 +278,9 @@ function App() {
       await chrome.storage.local.set({ personas: updatedPersonas })
       setSavedPersonas(updatedPersonas)
 
-      setSyncMessage({ 
-        type: 'success', 
-        text: `Successfully synced! ${newPersonasCount} new persona${newPersonasCount !== 1 ? 's' : ''} created from ${aliases.length} alias${aliases.length !== 1 ? 'es' : ''}.` 
+      setSyncMessage({
+        type: 'success',
+        text: `Successfully synced! ${newPersonasCount} new persona${newPersonasCount !== 1 ? 's' : ''} created from ${aliases.length} alias${aliases.length !== 1 ? 'es' : ''}.`,
       })
 
       // Go back to list view after successful sync
@@ -272,12 +288,11 @@ function App() {
         setShowPersona(false)
         setPersona(null)
       }, 2000)
-
     } catch (error) {
       console.error('Error syncing SimpleLogin aliases:', error)
-      setSyncMessage({ 
-        type: 'error', 
-        text: 'Failed to sync aliases. Please check your API key and try again.' 
+      setSyncMessage({
+        type: 'error',
+        text: 'Failed to sync aliases. Please check your API key and try again.',
       })
     } finally {
       setIsSyncing(false)
@@ -361,35 +376,6 @@ function App() {
             </Alert>
           )}
 
-          {syncMessage && (
-            <Alert className="my-4" variant={syncMessage.type === 'error' ? 'destructive' : 'default'}>
-              <AlertCircle className="w-4 h-4" />
-              <AlertTitle className="text-md">
-                {syncMessage.type === 'success' ? 'Success!' : 'Error'}
-              </AlertTitle>
-              <AlertDescription>{syncMessage.text}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="flex-1"
-              onClick={syncSimpleLoginAliases}
-              disabled={isSyncing}
-            >
-              {isSyncing ? (
-                <>Syncing...</>
-              ) : (
-                <>
-                  <Mail className="h-4 w-4 mr-2" />
-                  Sync SimpleLogin Aliases
-                </>
-              )}
-            </Button>
-          </div>
-
           <div className="space-y-4">
             <div className="text-center space-y-2">
               <Avatar className="h-20 w-20 mx-auto border-4 border-primary/20">
@@ -403,6 +389,29 @@ function App() {
                 Your privacy-protected persona for{' '}
                 <span className="font-medium">{currentDomain}</span>
               </p>
+              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                {(persona as SavedPersona).domain === currentDomain && (
+                  <Badge
+                    variant="outline"
+                    className="text-xs px-2 py-0.5 flex-shrink-0 border-green-600 text-green-600 dark:border-green-400 dark:text-green-400"
+                  >
+                    Current Site
+                  </Badge>
+                )}
+                {(persona as SavedPersona).simpleLoginAliasId && (
+                  <Badge variant="default" className="text-xs px-2 py-0.5 flex-shrink-0">
+                    <Mail className="h-3 w-3 mr-1" />
+                    Alias
+                  </Badge>
+                )}
+                {(persona as SavedPersona).createdAt &&
+                  new Date().getTime() - new Date((persona as SavedPersona).createdAt).getTime() <
+                    48 * 60 * 60 * 1000 && (
+                    <Badge variant="secondary" className="text-xs px-2 py-0.5 flex-shrink-0">
+                      New
+                    </Badge>
+                  )}
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -714,7 +723,38 @@ function App() {
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{savedPersona.fullName}</p>
-                <p className="text-xs text-muted-foreground truncate">{savedPersona.domain}</p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-xs text-muted-foreground truncate">{savedPersona.domain}</p>
+                  {savedPersona.domain === currentDomain && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] px-1.5 py-0 flex-shrink-0 border-green-600 text-green-600 dark:border-green-400 dark:text-green-400"
+                    >
+                      Current Site
+                    </Badge>
+                  )}
+                  {savedPersona.simpleLoginAliasId &&
+                    (savedPersona.simpleLoginEnabled === false ? (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0 flex-shrink-0 border-red-600 text-red-600 dark:border-red-400 dark:text-red-400"
+                      >
+                        <Mail className="h-2.5 w-2.5 mr-1" />
+                        Alias Disabled
+                      </Badge>
+                    ) : (
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0 flex-shrink-0">
+                        <Mail className="h-2.5 w-2.5 mr-1" />
+                        Alias
+                      </Badge>
+                    ))}
+                  {new Date().getTime() - new Date(savedPersona.createdAt).getTime() <
+                    48 * 60 * 60 * 1000 && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 flex-shrink-0">
+                      New
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
           ))}
