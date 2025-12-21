@@ -57,6 +57,7 @@ interface SavedPersona extends Persona {
   simpleLoginAliasId?: number
   simpleLoginEmail?: string
   simpleLoginEnabled?: boolean
+  simpleLoginDeleted?: boolean
 }
 
 function App() {
@@ -398,12 +399,29 @@ function App() {
                     Current Site
                   </Badge>
                 )}
-                {(persona as SavedPersona).simpleLoginAliasId && (
-                  <Badge variant="default" className="text-xs px-2 py-0.5 flex-shrink-0">
-                    <Mail className="h-3 w-3 mr-1" />
-                    Alias
-                  </Badge>
-                )}
+                {(persona as SavedPersona).simpleLoginAliasId &&
+                  ((persona as SavedPersona).simpleLoginDeleted ? (
+                    <Badge
+                      variant="outline"
+                      className="text-xs px-2 py-0.5 flex-shrink-0 border-gray-600 text-gray-600 dark:border-gray-400 dark:text-gray-400"
+                    >
+                      <Mail className="h-3 w-3 mr-1" />
+                      Alias Deleted
+                    </Badge>
+                  ) : (persona as SavedPersona).simpleLoginEnabled === false ? (
+                    <Badge
+                      variant="outline"
+                      className="text-xs px-2 py-0.5 flex-shrink-0 border-red-600 text-red-600 dark:border-red-400 dark:text-red-400"
+                    >
+                      <Mail className="h-3 w-3 mr-1" />
+                      Alias Disabled
+                    </Badge>
+                  ) : (
+                    <Badge variant="default" className="text-xs px-2 py-0.5 flex-shrink-0">
+                      <Mail className="h-3 w-3 mr-1" />
+                      Alias Active
+                    </Badge>
+                  ))}
                 {(persona as SavedPersona).createdAt &&
                   new Date().getTime() - new Date((persona as SavedPersona).createdAt).getTime() <
                     48 * 60 * 60 * 1000 && (
@@ -734,7 +752,15 @@ function App() {
                     </Badge>
                   )}
                   {savedPersona.simpleLoginAliasId &&
-                    (savedPersona.simpleLoginEnabled === false ? (
+                    (savedPersona.simpleLoginDeleted ? (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0 flex-shrink-0 border-gray-600 text-gray-600 dark:border-gray-400 dark:text-gray-400"
+                      >
+                        <Mail className="h-2.5 w-2.5 mr-1" />
+                        Alias Deleted
+                      </Badge>
+                    ) : savedPersona.simpleLoginEnabled === false ? (
                       <Badge
                         variant="outline"
                         className="text-[10px] px-1.5 py-0 flex-shrink-0 border-red-600 text-red-600 dark:border-red-400 dark:text-red-400"
@@ -745,7 +771,7 @@ function App() {
                     ) : (
                       <Badge variant="default" className="text-[10px] px-1.5 py-0 flex-shrink-0">
                         <Mail className="h-2.5 w-2.5 mr-1" />
-                        Alias
+                        Alias Active
                       </Badge>
                     ))}
                   {new Date().getTime() - new Date(savedPersona.createdAt).getTime() <

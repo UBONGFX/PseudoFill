@@ -9,6 +9,7 @@ import {
   Mail,
   RefreshCw,
   AlertCircle,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -32,6 +33,7 @@ interface SavedPersona extends Persona {
   simpleLoginAliasId?: number
   simpleLoginEmail?: string
   simpleLoginEnabled?: boolean
+  simpleLoginDeleted?: boolean
 }
 
 interface SettingsProps {
@@ -115,7 +117,11 @@ export function Settings({ onBack }: SettingsProps) {
     setIsDeleted(true)
     setTimeout(() => setIsDeleted(false), 2000)
   }
-
+  const removeFromDeletedList = async (aliasId: number) => {
+    const updatedDeletedIds = deletedAliasIds.filter(id => id !== aliasId)
+    setDeletedAliasIds(updatedDeletedIds)
+    await chrome.storage.local.set({ deletedSimpleLoginAliasIds: updatedDeletedIds })
+  }
   const syncSimpleLoginAliases = async () => {
     setIsSyncing(true)
     setSyncMessage(null)
@@ -146,6 +152,27 @@ export function Settings({ onBack }: SettingsProps) {
       let newPersonasCount = 0
       let updatedPersonasCount = 0
       const updatedPersonas = [...savedPersonas]
+      const fetchedAliasIds = fetchedAliases.map(a => a.id)
+
+      // First, mark any personas whose aliases no longer exist in SimpleLogin
+      updatedPersonas.forEach((persona, index) => {
+        if (persona.simpleLoginAliasId && !fetchedAliasIds.includes(persona.simpleLoginAliasId)) {
+          if (!persona.simpleLoginDeleted) {
+            updatedPersonas[index] = {
+              ...persona,
+              simpleLoginDeleted: true,
+            }
+            updatedPersonasCount++
+          }
+        } else if (persona.simpleLoginDeleted) {
+          // Clear the deleted flag if the alias exists again
+          updatedPersonas[index] = {
+            ...persona,
+            simpleLoginDeleted: false,
+          }
+          updatedPersonasCount++
+        }
+      })
 
       for (const alias of fetchedAliases) {
         // Skip if this alias was manually deleted by the user
@@ -454,23 +481,25 @@ export function Settings({ onBack }: SettingsProps) {
                                   variant="outline"
                                   className="text-[10px] px-1.5 py-0 border-green-600 text-green-600 dark:border-green-400 dark:text-green-400"
                                 >
-                                  Alias Active
+                                  Active Alias
                                 </Badge>
                               ) : (
                                 <Badge
                                   variant="outline"
                                   className="text-[10px] px-1.5 py-0 border-red-600 text-red-600 dark:border-red-400 dark:text-red-400"
                                 >
-                                  Alias Disabled
+                                  Disabled Aliasd
                                 </Badge>
                               )}
 
                               {deletedAliasIds.includes(alias.id) && (
                                 <Badge
                                   variant="outline"
-                                  className="text-[10px] px-1.5 py-0 border-orange-600 text-orange-600 dark:border-orange-400 dark:text-orange-400"
+                                  className="text-[10px] px-1.5 py-0 border-orange-600 text-orange-600 dark:border-orange-400 dark:text-orange-400 cursor-pointer hover:bg-orange-600/10 flex items-center gap-0.5"
+                                  onClick={() => removeFromDeletedList(alias.id)}
                                 >
                                   Won't Sync
+                                  <X className="h-2.5 w-2.5" />
                                 </Badge>
                               )}
                             </div>
