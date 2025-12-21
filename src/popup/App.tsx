@@ -16,7 +16,6 @@ import {
   AlertCircle,
   Settings as SettingsIcon,
 } from 'lucide-react'
-import { ModeToggle } from '../components/mode-toggle'
 import { Settings } from '../components/Settings'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -48,11 +47,14 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { generatePersona, type Persona } from '@/lib/persona-generator'
+import { fetchSimpleLoginAliases, getStoredApiKey } from '@/lib/simplelogin-api'
 
 interface SavedPersona extends Persona {
   id: string
   domain: string
   createdAt: string
+  simpleLoginAliasId?: number
+  simpleLoginEmail?: string
 }
 
 function App() {
@@ -64,6 +66,8 @@ function App() {
   const [currentDomain, setCurrentDomain] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [searchFilters, setSearchFilters] = useState<string[]>(['name', 'email', 'domain'])
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   // Load saved personas on mount
   useEffect(() => {
@@ -193,6 +197,94 @@ function App() {
     setPersona(null)
   }
 
+  const syncSimpleLoginAliases = async () => {
+    setIsSyncing(true)
+    setSyncMessage(null)
+
+    try {
+      const apiKey = await getStoredApiKey()
+      
+      if (!apiKey) {
+        setSyncMessage({ 
+          type: 'error', 
+          text: 'No API key found. Please add your SimpleLogin API key in Settings.' 
+        })
+        setIsSyncing(false)
+        return
+      }
+
+      const aliases = await fetchSimpleLoginAliases(apiKey)
+      
+      if (aliases.length === 0) {
+        setSyncMessage({ 
+          type: 'error', 
+          text: 'No aliases found in your SimpleLogin account.' 
+        })
+        setIsSyncing(false)
+        return
+      }
+
+      let newPersonasCount = 0
+      const updatedPersonas = [...savedPersonas]
+
+      for (const alias of aliases) {
+        // Check if persona for this alias already exists
+        const existingPersona = updatedPersonas.find(
+          p => p.simpleLoginAliasId === alias.id
+        )
+
+        if (existingPersona) {
+          continue // Skip if persona already exists
+        }
+
+        // Extract domain from alias note or use a generic one
+        const domain = alias.note || 'simplelogin.io'
+        
+        // Generate a new persona
+        const newPersona = generatePersona(domain)
+        
+        // Create saved persona with SimpleLogin alias info
+        const savedPersona: SavedPersona = {
+          ...newPersona,
+          email: alias.email, // Use the actual alias email
+          id: Date.now().toString() + '-' + alias.id,
+          domain: domain,
+          createdAt: new Date(alias.creation_timestamp * 1000).toISOString(),
+          simpleLoginAliasId: alias.id,
+          simpleLoginEmail: alias.email,
+        }
+
+        updatedPersonas.push(savedPersona)
+        newPersonasCount++
+      }
+
+      // Save to storage
+      await chrome.storage.local.set({ personas: updatedPersonas })
+      setSavedPersonas(updatedPersonas)
+
+      setSyncMessage({ 
+        type: 'success', 
+        text: `Successfully synced! ${newPersonasCount} new persona${newPersonasCount !== 1 ? 's' : ''} created from ${aliases.length} alias${aliases.length !== 1 ? 'es' : ''}.` 
+      })
+
+      // Go back to list view after successful sync
+      setTimeout(() => {
+        setShowPersona(false)
+        setPersona(null)
+      }, 2000)
+
+    } catch (error) {
+      console.error('Error syncing SimpleLogin aliases:', error)
+      setSyncMessage({ 
+        type: 'error', 
+        text: 'Failed to sync aliases. Please check your API key and try again.' 
+      })
+    } finally {
+      setIsSyncing(false)
+      setTimeout(() => setSyncMessage(null), 5000)
+    }
+  }
+
   // Check if current persona is saved
   const isPersonaSaved = persona && 'id' in persona
 
@@ -268,6 +360,35 @@ function App() {
               </AlertTitle>
             </Alert>
           )}
+
+          {syncMessage && (
+            <Alert className="my-4" variant={syncMessage.type === 'error' ? 'destructive' : 'default'}>
+              <AlertCircle className="w-4 h-4" />
+              <AlertTitle className="text-md">
+                {syncMessage.type === 'success' ? 'Success!' : 'Error'}
+              </AlertTitle>
+              <AlertDescription>{syncMessage.text}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="flex-1"
+              onClick={syncSimpleLoginAliases}
+              disabled={isSyncing}
+            >
+              {isSyncing ? (
+                <>Syncing...</>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Sync SimpleLogin Aliases
+                </>
+              )}
+            </Button>
+          </div>
 
           <div className="space-y-4">
             <div className="text-center space-y-2">

@@ -5,7 +5,7 @@ chrome.runtime.onInstalled.addListener(() => {
 })
 
 // Handle messages from popup or content scripts
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === 'generatePseudonym') {
     // Pseudonym generation logic will go here
     sendResponse({ pseudonym: 'generated_pseudonym' })
