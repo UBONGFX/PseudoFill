@@ -10,6 +10,7 @@ import {
   RefreshCw,
   AlertCircle,
   X,
+  Filter,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -18,6 +19,12 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useTheme } from '@/components/theme-provider'
 import {
   fetchSimpleLoginAliases,
@@ -55,6 +62,7 @@ export function Settings({ onBack }: SettingsProps) {
     type: 'success' | 'error'
     text: string
   } | null>(null)
+  const [aliasFilters, setAliasFilters] = useState<string[]>(['active', 'disabled', 'linked', 'unlinked', 'wontSync'])
 
   useEffect(() => {
     // Load saved API key
@@ -121,6 +129,39 @@ export function Settings({ onBack }: SettingsProps) {
     const updatedDeletedIds = deletedAliasIds.filter((id) => id !== aliasId)
     setDeletedAliasIds(updatedDeletedIds)
     await chrome.storage.local.set({ deletedSimpleLoginAliasIds: updatedDeletedIds })
+  }
+
+  const toggleAliasFilter = (filter: string) => {
+    setAliasFilters((prev) =>
+      prev.includes(filter) ? prev.filter((f) => f !== filter) : [...prev, filter]
+    )
+  }
+
+  const getFilteredAliases = () => {
+    return aliases.filter((alias) => {
+      // Status filters
+      const isActive = alias.enabled
+      const isDisabled = !alias.enabled
+      const statusMatch =
+        (aliasFilters.includes('active') && isActive) ||
+        (aliasFilters.includes('disabled') && isDisabled)
+
+      // Linked status filters
+      const hasLinkedPersona = savedPersonas.some((p) => p.simpleLoginAliasId === alias.id)
+      const linkedMatch =
+        (aliasFilters.includes('linked') && hasLinkedPersona) ||
+        (aliasFilters.includes('unlinked') && !hasLinkedPersona)
+
+      // Won't sync filter
+      const isMarkedWontSync = deletedAliasIds.includes(alias.id)
+      const wontSyncMatch = aliasFilters.includes('wontSync') && isMarkedWontSync
+
+      // If no filters selected, show all
+      if (aliasFilters.length === 0) return true
+
+      // Show if matches any selected filter
+      return statusMatch || linkedMatch || wontSyncMatch
+    })
   }
   const syncSimpleLoginAliases = async () => {
     setIsSyncing(true)
@@ -418,20 +459,74 @@ export function Settings({ onBack }: SettingsProps) {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-sm font-medium">Your Aliases</Label>
+                      <Label className="text-sm font-medium">
+                        Your Aliases {aliases.length > 0 && `(${aliases.length})`}
+                      </Label>
                       <p className="text-xs text-muted-foreground mt-1">
                         Email aliases and their linked personas
                       </p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={loadAliases}
-                      disabled={isLoadingAliases}
-                    >
-                      <RefreshCw className={`h-4 w-4 ${isLoadingAliases ? 'animate-spin' : ''}`} />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <Filter className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuCheckboxItem
+                            checked={aliasFilters.includes('active')}
+                            onCheckedChange={() => toggleAliasFilter('active')}
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            Active
+                          </DropdownMenuCheckboxItem>
+                          <DropdownMenuCheckboxItem
+                            checked={aliasFilters.includes('disabled')}
+                            onCheckedChange={() => toggleAliasFilter('disabled')}
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            Disabled
+                          </DropdownMenuCheckboxItem>
+                          <DropdownMenuCheckboxItem
+                            checked={aliasFilters.includes('linked')}
+                            onCheckedChange={() => toggleAliasFilter('linked')}
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            Linked
+                          </DropdownMenuCheckboxItem>
+                          <DropdownMenuCheckboxItem
+                            checked={aliasFilters.includes('unlinked')}
+                            onCheckedChange={() => toggleAliasFilter('unlinked')}
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            Unlinked
+                          </DropdownMenuCheckboxItem>
+                          <DropdownMenuCheckboxItem
+                            checked={aliasFilters.includes('wontSync')}
+                            onCheckedChange={() => toggleAliasFilter('wontSync')}
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            Won't Sync
+                          </DropdownMenuCheckboxItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={loadAliases}
+                        disabled={isLoadingAliases}
+                      >
+                        <RefreshCw className={`h-4 w-4 ${isLoadingAliases ? 'animate-spin' : ''}`} />
+                      </Button>
+                    </div>
                   </div>
+
+                  {aliases.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Showing {getFilteredAliases().length} of {aliases.length} alias{aliases.length !== 1 ? 'es' : ''}
+                    </p>
+                  )}
 
                   {isLoadingAliases ? (
                     <div className="text-center py-4 text-sm text-muted-foreground">
@@ -444,7 +539,7 @@ export function Settings({ onBack }: SettingsProps) {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {aliases.map((alias) => {
+                      {getFilteredAliases().map((alias) => {
                         const linkedPersona = savedPersonas.find(
                           (p) => p.simpleLoginAliasId === alias.id
                         )
