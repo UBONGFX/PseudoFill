@@ -110,3 +110,35 @@ export async function validateApiKey(apiKey: string): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * Update an alias note/name on SimpleLogin
+ * @param apiKey SimpleLogin API key
+ * @param aliasId Alias ID to update
+ * @param note Note content (optional)
+ * @param name Alias name (optional)
+ * @returns Updated alias
+ */
+export async function updateSimpleLoginAlias(
+  apiKey: string,
+  aliasId: number,
+  options: { note?: string; name?: string }
+): Promise<SimpleLoginAlias> {
+  const response = await fetch(`https://app.simplelogin.io/api/aliases/${aliasId}`, {
+    method: 'PATCH',
+    headers: {
+      'Authentication': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(options),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('SimpleLogin API error:', response.status, errorText)
+    throw new Error(`Failed to update alias: ${response.status} ${response.statusText}`)
+  }
+
+  const data = await response.json()
+  return data
+}
