@@ -12,6 +12,7 @@ import {
   X,
   Filter,
   Info,
+  Search,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -67,6 +68,7 @@ export function Settings({ onBack }: SettingsProps) {
   const [aliasFilters, setAliasFilters] = useState<string[]>(['active', 'disabled', 'linked', 'unlinked', 'wontSync'])
   const [syncPersonasToSimpleLogin, setSyncPersonasToSimpleLogin] = useState(false)
   const [isSyncingPersonas, setIsSyncingPersonas] = useState(false)
+  const [aliasSearchQuery, setAliasSearchQuery] = useState('')
 
   useEffect(() => {
     // Load saved API key
@@ -217,6 +219,19 @@ export function Settings({ onBack }: SettingsProps) {
 
   const getFilteredAliases = () => {
     return aliases.filter((alias) => {
+      // Search filter
+      if (aliasSearchQuery) {
+        const query = aliasSearchQuery.toLowerCase()
+        const emailMatch = alias.email.toLowerCase().includes(query)
+        const noteMatch = alias.note?.toLowerCase().includes(query)
+        const linkedPersona = savedPersonas.find((p) => p.simpleLoginAliasId === alias.id)
+        const personaMatch = linkedPersona?.fullName.toLowerCase().includes(query)
+        
+        if (!emailMatch && !noteMatch && !personaMatch) {
+          return false
+        }
+      }
+
       // Status filters
       const isActive = alias.enabled
       const isDisabled = !alias.enabled
@@ -427,46 +442,6 @@ export function Settings({ onBack }: SettingsProps) {
                 </Button>
               </div>
             </div>
-
-            <Separator className="my-4" />
-
-            {/* Sync Personas to SimpleLogin */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-medium">Sync Personas to SimpleLogin</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Store persona data as JSON in alias notes
-                  </p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={syncPersonasToSimpleLogin}
-                    onChange={(e) => toggleSyncPersonas(e.target.checked)}
-                    disabled={isSyncingPersonas}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                </label>
-              </div>
-              {isSyncingPersonas && (
-                <Alert>
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  <AlertDescription>
-                    Syncing personas to SimpleLogin aliases...
-                  </AlertDescription>
-                </Alert>
-              )}
-              {syncPersonasToSimpleLogin && !isSyncingPersonas && (
-                <Alert>
-                  <Info className="h-4 w-4" />
-                  <AlertDescription>
-                    When enabled, persona information will be saved as JSON in the note field of your SimpleLogin aliases. This allows you to backup and sync your personas across devices.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
           </TabsContent>
 
           <TabsContent value="simplelogin" className="space-y-4 mt-4 overflow-y-auto max-h-[450px]">
@@ -528,6 +503,49 @@ export function Settings({ onBack }: SettingsProps) {
                 </div>
               )}
             </div>
+
+            {/* Sync Personas to SimpleLogin */}
+            {hasExistingKey && (
+              <>
+                <Separator className="my-4" />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm font-medium">Sync Personas to SimpleLogin</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Store persona data as JSON in alias notes
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={syncPersonasToSimpleLogin}
+                        onChange={(e) => toggleSyncPersonas(e.target.checked)}
+                        disabled={isSyncingPersonas}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                  </div>
+                  {isSyncingPersonas && (
+                    <Alert>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      <AlertDescription>
+                        Syncing personas to SimpleLogin aliases...
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {syncPersonasToSimpleLogin && !isSyncingPersonas && (
+                    <Alert>
+                      <Info className="h-4 w-4" />
+                      <AlertDescription>
+                        When enabled, persona information will be saved as JSON in the note field of your SimpleLogin aliases. This allows you to backup and sync your personas across devices.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* Sync Message */}
             {syncMessage && (
@@ -639,6 +657,18 @@ export function Settings({ onBack }: SettingsProps) {
                       </Button>
                     </div>
                   </div>
+
+                  {aliases.length > 0 && (
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search aliases by email, note, or persona..."
+                        value={aliasSearchQuery}
+                        onChange={(e) => setAliasSearchQuery(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                  )}
 
                   {aliases.length > 0 && (
                     <p className="text-xs text-muted-foreground">
